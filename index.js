@@ -5,8 +5,8 @@ import { setCookie, getCookie } from 'hono/cookie';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { db } from './db/index.js';
-import { users, transactions, transactionType } from './db/schema.js';
-import { eq, desc, sql, and } from 'drizzle-orm';
+import { users, transactions } from './db/schema.js';
+import { eq, desc, sql } from 'drizzle-orm';
 
 const app = new Hono();
 const SECRET = process.env.JWT_SECRET || 'fallback-secret-key';
@@ -17,27 +17,12 @@ app.onError((err, c) => {
   return c.json({ success: false, message: 'Internal Server Error' }, 500);
 });
 
-// Middleware untuk auth
-const authMiddleware = async (c, next) => {
-  const token = getCookie(c, 'token');
-  if (!token) {
-    return c.json({ success: false, message: 'Unauthorized' }, 401);
-  }
-
-  try {
-    const user = jwt.verify(token, SECRET);
-    c.set('user', user);
-    await next();
-  } catch (error) {
-    return c.json({ success: false, message: 'Token tidak valid' }, 401);
-  }
-};
-
 // --- API REGISTRASI ---
 app.post('/api/register', async (c) => {
     try {
         const { username, password } = await c.req.json();
         
+        // Validasi input
         if (!username || !password) {
             return c.json({ success: false, message: 'Username dan password harus diisi' }, 400);
         }
@@ -64,6 +49,7 @@ app.post('/api/login', async (c) => {
     try {
         const { username, password } = await c.req.json();
 
+        // Validasi input
         if (!username || !password) {
             return c.json({ success: false, message: 'Username dan password harus diisi' }, 400);
         }
@@ -117,54 +103,18 @@ app.post('/api/logout', (c) => {
 });
 
 // --- API ME ---
-app.get('/api/me', authMiddleware, (c) => {
-    const user = c.get('user');
-    return c.json({ success: true, data: user });
-});
-
-// --- API TRANSACTIONS ---
-
-// Create transaction
-app.post('/api/transactions', authMiddleware, async (c) => {
+app.get('/api/me', (c) => {
     try {
-        const user = c.get('user');
-        const { nominal, transactionDate, status, description } = await c.req.json();
-
-        if (!nominal || !transactionDate || !status) {
-            return c.json({ success: false, message: 'Data tidak lengkap' }, 400);
+        const token = getCookie(c, 'token');
+        if (!token) {
+            return c.json({ success: false, message: 'Unauthorized' }, 401);
         }
-
-        const newTransaction = await db.insert(transactions)
-            .values({
-                userId: user.id,
-                nominal,
-                transactionDate,
-                status,
-                description
-            })
-            .returning();
-
-        return c.json({ success: true, data: newTransaction[0] }, 201);
-    } catch (error) {
-        console.error('Transaction error:', error);
-        return c.json({ success: false, message: 'Gagal membuat transaksi' }, 400);
-    }
-});
-
-// Get all transactions for user
-app.get('/api/transactions', authMiddleware, async (c) => {
-    try {
-        const user = c.get('user');
         
-        const userTransactions = await db.query.transactions.findMany({
-            where: eq(transactions.userId, user.id),
-            orderBy: [desc(transactions.transactionDate)]
-        });
-
-        return c.json({ success: true, data: userTransactions });
+        const user = jwt.verify(token, SECRET);
+        return c.json({ success: true, data: user });
     } catch (error) {
-        console.error('Get transactions error:', error);
-        return c.json({ success: false, message: 'Gagal mengambil data transaksi' }, 500);
+        console.error('Me endpoint error:', error);
+        return c.json({ success: false, message: 'Token tidak valid' }, 401);
     }
 });
 
@@ -177,7 +127,7 @@ app.get('/health', (c) => {
 if (process.env.VERCEL) {
     globalThis.app = app;
 } else {
-    const port = process.env.PORT || 3000;
+    const port = process.env.PORT || 4000; // Ganti ke port 4000
     
     serve({ 
         fetch: app.fetch, 

@@ -8,6 +8,7 @@ const pool = new Pool({
 
 export const db = drizzle(pool, { schema });
 
+// Test connection
 const testConnection = async () => {
   try {
     const client = await pool.connect();
