@@ -40,7 +40,7 @@ app.post('/api/register', async (c) => {
             return c.json({ success: false, message: 'Username sudah digunakan' }, 400);
         }
         
-        return c.json({ success: false, message: 'Registrasi gagal' }, 400);
+        return c.json({ success: false, message: 'Registrasi gagal', error: error }, 400);
     }
 });
 
