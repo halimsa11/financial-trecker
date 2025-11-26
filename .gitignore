@@ -1,3 +1,5 @@
 #depedenccies
 
 node_modules
+
+.env
