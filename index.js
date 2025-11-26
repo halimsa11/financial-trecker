@@ -127,7 +127,7 @@ app.get('/health', (c) => {
 if (process.env.VERCEL) {
     globalThis.app = app;
 } else {
-    const port = process.env.PORT || 4000; // Ganti ke port 4000
+    const port = process.env.PORT || 4000;
     
     serve({ 
         fetch: app.fetch, 
