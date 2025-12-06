@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
+import { serveStatic } from '@hono/node-server/serve-static';
 import { setCookie, getCookie } from 'hono/cookie';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
