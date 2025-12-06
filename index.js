@@ -137,4 +137,89 @@ if (process.env.VERCEL) {
     });
 }
 
+const authMiddleware = async (c, next) => {
+    const token = getCookie(c, 'token');
+    if (!token) return c.json({ success: false, message: 'Unauthorized' }, 401);
+    try {
+        const user = jwt.verify(token, SECRET);
+        c.set('user', user); // Menyimpan data user di context Hono
+        await next();
+    } catch (error) {
+        return c.json({ success: false, message: 'Token tidak valid' }, 401);
+    }
+};
+ 
+// --- API TAMBAH TRANSAKSI (POST) ---
+app.post('/api/transactions', authMiddleware, async (c) => {
+    try {
+        const user = c.get('user');
+        const { nominal, transactionDate, status, description } = await c.req.json();
+        const newTransaction = await db.insert(transactions)
+            .values({
+                userId: user.id,
+                nominal: nominal.toString(), // Simpan nominal sebagai string
+                transactionDate: transactionDate,
+                status: status,
+                description: description
+            })
+            .returning();
+        return c.json({ success: true, data: newTransaction[0] }, 201);
+    } catch (error) {
+        console.error("error", error);
+        return c.json({ success: false, message: 'Gagal menambah transaksi' }, 400);
+    }
+});
+ 
+// --- API LIHAT TRANSAKSI PER BULAN (GET) ---
+app.get('/api/transactions', authMiddleware, async (c) => {
+    try {
+        const user = c.get('user');
+        const { year, month } = c.req.query();
+
+        if (!year || !month) {
+            return c.json({ success: false, message: "Tahun dan bulan wajib diisi" }, 400);
+        }
+
+        // Convert ke number
+        const y = Number(year);
+        const m = Number(month);
+
+        // Tanggal mulai & akhir bulan
+        const startOfMonth = new Date(y, m - 1, 1);   // contoh: 2024-12-01
+        const endOfMonth = new Date(y, m, 1);         // contoh: 2025-01-01
+
+        const userTransactions = await db.query.transactions.findMany({
+            where: (t, { eq, and, gte, lt }) => and(
+                eq(t.userId, user.id),
+                gte(t.transactionDate, startOfMonth),
+                lt(t.transactionDate, endOfMonth)
+            ),
+            orderBy: (t, { desc }) => desc(t.transactionDate)
+        });
+
+        const totalIncome = userTransactions
+            .filter(t => t.status === 'income')
+            .reduce((sum, t) => sum + Number(t.nominal), 0);
+
+        const totalOutcome = userTransactions
+            .filter(t => t.status === 'outcome')
+            .reduce((sum, t) => sum + Number(t.nominal), 0);
+
+        const balance = totalIncome - totalOutcome;
+
+        return c.json({
+            success: true,
+            data: userTransactions,
+            summary: { totalIncome, totalOutcome, balance }
+        });
+
+    } catch (error) {
+        console.error("Transaction fetch error:", error);
+        return c.json({ success: false, message: "Gagal mengambil transaksi" }, 500);
+    }
+});
+
+// --- ROOT URL dan SERVE STATIC FILES (untuk UI) ---
+app.use('/*', serveStatic({ root: './public' })); 
+
 export default app;
